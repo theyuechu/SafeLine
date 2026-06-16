@@ -21,6 +21,11 @@ func StartCron() error {
 		return err
 	}
 
+	_, err = cronInstance.AddFunc(specThreatIntel, syncThreatIntel)
+	if err != nil {
+		return err
+	}
+
 	cronInstance.Start()
 	return nil
 }

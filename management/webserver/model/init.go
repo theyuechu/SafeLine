@@ -19,7 +19,7 @@ func InitModels() error {
 		return err
 	}
 
-	if err := db.AutoMigrate(&User{}, &DetectLogBasic{}, &DetectLogDetail{}, &Behaviour{}, &Options{}, &Website{}, &PolicyRule{}, &SystemStatistics{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &DetectLogBasic{}, &DetectLogDetail{}, &Behaviour{}, &Options{}, &Website{}, &PolicyRule{}, &SystemStatistics{}, &ThreatIntel{}); err != nil {
 		return err
 	}
 

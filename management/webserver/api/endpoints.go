@@ -23,4 +23,7 @@ const (
 	DashboardIntercepts = "/dashboard/intercepts"
 	PolicyGroupGlobal   = "/PolicyGroupGlobal"
 	SrcIPConfig         = "/SrcIPConfig"
+
+	// 威胁情报
+	ThreatIntelStatus = "/threat-intel/status"
 )

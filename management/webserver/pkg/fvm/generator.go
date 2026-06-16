@@ -21,6 +21,8 @@ const (
 	Main              = "main"
 	Preprocess        = "preprocess"
 	MassPackage       = "mass_package"
+	ThreatIntel       = "threat_intel"
+	ThreatIntelGlobal = "threat_intel_global"
 	PolicyRule        = "policy_rule"
 	PolicyRuleGlobal  = "policy_rule_global"
 	PolicyGroup       = "policy_group"
@@ -74,6 +76,12 @@ func GenerateFullFSL(tx *gorm.DB) (fullFSL string, err error) {
 	fullFSL += pFSL
 
 	fullFSL += MassPackageTable()
+
+	tiFSL, err := ThreatIntelTable(tx)
+	if err != nil {
+		return "", err
+	}
+	fullFSL += tiFSL
 
 	prFSL, err := PolicyRuleTable(tx)
 	if err != nil {
@@ -142,6 +150,57 @@ func MassPackageTable() (mpFSL string) {
 		fsl.Set("@attack_type", INT, "-4"),
 	))
 	return mpFSL
+}
+
+func ThreatIntelTable(db *gorm.DB) (tiFSL string, err error) {
+	tiFSL += fsl.CreateTable(ThreatIntelGlobal, map[fsl.State]fsl.State{fsl.S_ABORT: fsl.S_RETURN})
+
+	var intelList []model.ThreatIntel
+	res := db.Where("expire_at > NOW()").Find(&intelList)
+	if res.Error != nil {
+		err = errors.New(fmt.Sprintf("fetch ThreatIntel failed: %s", res.Error))
+		return "", err
+	}
+
+	added := 0
+	for _, item := range intelList {
+		ip := strings.TrimSpace(item.IP)
+		if ip == "" {
+			continue
+		}
+
+		var where string
+		if strings.Contains(ip, "/") {
+			// CIDR
+			where = fmt.Sprintf("@src_ip::INET IN CIDR(%s)", fsl.Quote(ip))
+		} else {
+			// single IP
+			where = fmt.Sprintf("string.equals_case(inet_to_string(@src_ip::INET), %s)", fsl.Quote(ip))
+		}
+
+		tiFSL += fsl.AppendInto(ThreatIntelGlobal,
+			fmt.Sprintf("ti_%d", item.ID),
+			where,
+			fsl.Actions(
+				fsl.Set("@skip_remaining", BOOL, "true"),
+				fsl.Set("@rule_id", STR, fsl.Quote(fmt.Sprintf("ti/%s", string(item.Source)))),
+				fsl.Set("@final_action", INT, "1"),
+				fsl.Set("@convert_to_dlog", INT, "1"),
+				fsl.Set("@dlog_save_to_db", INT, "1"),
+				fsl.Set("@attack_type", INT, "63"),
+				"set_status_code(403), DROP",
+			),
+		)
+		added++
+	}
+
+	logger.Infof("ThreatIntel: %d active IPs compiled into FSL", added)
+
+	tiFSL += fsl.CreateTable(ThreatIntel, nil)
+	tiFSL += fsl.AppendInto(ThreatIntel, "threat_intel_global", "", fsl.Goto(ThreatIntelGlobal))
+	tiFSL += fsl.AppendInto(ThreatIntel, "set_status_code", "@final_action::INTEGER = 1", "set_status_code(403)")
+
+	return tiFSL, nil
 }
 
 func PolicyRuleTable(db *gorm.DB) (prFSL string, err error) {
@@ -310,6 +369,7 @@ func MainTable() (mainFSL string) {
 	mainFSL += fsl.CreateTable(Main, nil)
 	mainFSL += fsl.AppendInto(Main, "m_preprocess", "", fsl.Goto(Preprocess))
 	mainFSL += fsl.AppendInto(Main, "m_mass_package", "", fsl.Goto(MassPackage))
+	mainFSL += fsl.AppendInto(Main, "m_threat_intel", "@skip_remaining::BOOLEAN = false", fsl.Goto(ThreatIntel))
 	mainFSL += fsl.AppendInto(Main, "m_policy_rule", "@skip_remaining::BOOLEAN = false", fsl.Goto(PolicyRule))
 	mainFSL += fsl.AppendInto(Main, "m_policy_group", "@skip_remaining::BOOLEAN = false", fsl.Goto(PolicyGroup))
 	mainFSL += fsl.AppendInto(Main, "m_weblog_generate", "", fsl.Goto(WeblogGenerate))

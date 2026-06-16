@@ -130,6 +130,8 @@ func main() {
 		logger.Fatalln("Failed to start cron: ", err)
 	}
 
+	cron.InitThreatIntel()
+
 	if err := rpc.StartGRPCSever(); err != nil {
 		logger.Fatalln("Failed to start gRPC server: ", err)
 	}
@@ -202,6 +204,8 @@ func main() {
 
 	limitedRouters.GET(api.SrcIPConfig, api.GetSrcIPConfig)
 	limitedRouters.PUT(api.SrcIPConfig, api.PutSrcIPConfig)
+
+	limitedRouters.GET(api.ThreatIntelStatus, api.GetThreatIntelStatus)
 
 	logger.Info("Staring...")
 	if err := r.Run(config.GlobalConfig.Server.ListenAddr); err != nil {
